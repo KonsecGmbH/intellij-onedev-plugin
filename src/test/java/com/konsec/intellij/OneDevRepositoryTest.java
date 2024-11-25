@@ -27,6 +27,8 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
 
     private static String URL;
     private static String TOKEN;
+    private static String USERNAME;
+    private static String PASSWORD;
 
     private OneDevRepository repository;
 
@@ -41,15 +43,15 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
         }
 
         URL = getenv("ONEDEV_URL", "http://127.0.0.1:6610/");
+        USERNAME = getenv("ONEDEV_USERNAME", "test");
+        PASSWORD = getenv("ONEDEV_PASSWORD", "test");
 
         var token = getenv("ONEDEV_TOKEN", null);
         if (token == null) {
-            var username = getenv("ONEDEV_USERNAME", "test");
-            var password = getenv("ONEDEV_PASSWORD", "test");
 
             for (int i = 0; i < 100; i++) {
                 try {
-                    token = issueAccessToken(username, password);
+                    token = issueAccessToken(USERNAME, PASSWORD);
                     break;
                 } catch (SocketException e) {
                     // Ignore, docker container is staring
@@ -118,9 +120,19 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
         super.setUp();
 
         setUpOneDev();
+    }
 
+    private void initRepository(boolean useAccessToken) {
         var httpClient = HttpClientBuilder.create().build();
-        repository = new OneDevRepository(URL, TOKEN, httpClient);
+        repository = new OneDevRepository(httpClient);
+        repository.setUseAccessToken(useAccessToken);
+        repository.setUrl(URL);
+        if (useAccessToken) {
+            repository.setPassword(TOKEN);
+        } else {
+            repository.setUsername(USERNAME);
+            repository.setPassword(PASSWORD);
+        }
     }
 
     private Optional<Exception> verifyConnection() {
@@ -129,7 +141,9 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
     }
 
     @Test
-    public void testConnection() {
+    public void testConnectionUsernamePassword() {
+        initRepository(false);
+
         Exception error = verifyConnection().orElse(null);
         if (error != null) {
             error.printStackTrace();
@@ -138,7 +152,20 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
     }
 
     @Test
-    public void testLoadTasks() throws Exception {
+    public void testConnectionToken() {
+        initRepository(true);
+
+        Exception error = verifyConnection().orElse(null);
+        if (error != null) {
+            error.printStackTrace();
+        }
+        Assert.assertNull(error);
+    }
+
+    @Test
+    public void testOneDevApiOperations() throws IOException {
+        initRepository(true);
+
         var projects = repository.loadProjects();
         if (projects.isEmpty()) {
             initTestProject();

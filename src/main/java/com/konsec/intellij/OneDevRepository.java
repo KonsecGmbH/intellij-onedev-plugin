@@ -53,15 +53,14 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     private static final TypeToken<List<OneDevProject>> LIST_OF_PROJECTS_TYPE = new TypeToken<>() {
     };
 
+    private boolean useAccessToken;
+    private String searchQuery;
+
     private HttpClient httpClient;
 
-    private boolean assigned = false;
-
-    public OneDevRepository(String url, String token, HttpClient httpClient) {
+    public OneDevRepository(HttpClient httpClient) {
         this();
 
-        setUrl(url);
-        setPassword(token);
         this.httpClient = httpClient;
 
         init();
@@ -74,8 +73,11 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
 
     public OneDevRepository(OneDevRepository other) {
         super(other);
+        setUsername(other.getUsername());
         setPassword(other.getPassword());
-        assigned = other.assigned;
+        setUseAccessToken(other.isUseAccessToken());
+        setSearchQuery(other.getSearchQuery());
+
         init();
     }
 
@@ -84,14 +86,48 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         setPreferredCloseTaskState(STATE_CLOSED);
     }
 
+    public boolean isUseAccessToken() {
+        return useAccessToken;
+    }
+
+    public void setUseAccessToken(boolean useAccessToken) {
+        this.useAccessToken = useAccessToken;
+    }
+
+    public String getSearchQuery() {
+        return searchQuery;
+    }
+
+    public void setSearchQuery(String searchQuery) {
+        this.searchQuery = searchQuery;
+    }
+
+    @Override
+    public boolean isConfigured() {
+        // URL is always required
+        if (!super.isConfigured()) {
+            return false;
+        }
+        // Password (token) too
+        if (StringUtil.isEmpty(getPassword())) {
+            return false;
+        }
+        // Username only if access token is not used
+        if (!isUseAccessToken() && StringUtil.isEmpty(getUsername())) {
+            return false;
+        }
+        return true;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof OneDevRepository other)) {
             return false;
         }
         return Objects.equals(getPassword(), other.getPassword()) &&
-                Objects.equals(getUrl(), other.getUrl()) &&
-                Objects.equals(assigned, other.assigned);
+                Objects.equals(isUseAccessToken(), other.isUseAccessToken()) &&
+                Objects.equals(getSearchQuery(), other.getSearchQuery()) &&
+                Objects.equals(getUrl(), other.getUrl());
     }
 
     @NotNull
@@ -129,7 +165,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     }
 
     @Override
-    public Task[] getIssues(@Nullable String query, int offset, int limit, boolean withClosed, @NotNull ProgressIndicator cancelled) throws Exception {
+    public Task[] getIssues(@Nullable String query, int offset, int limit, boolean withClosed, @NotNull ProgressIndicator cancelled) throws IOException {
         return findIssues(query, offset, limit, withClosed);
     }
 
@@ -150,7 +186,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     }
 
     @Override
-    public void setTaskState(@NotNull Task task, @NotNull CustomTaskState state) throws Exception {
+    public void setTaskState(@NotNull Task task, @NotNull CustomTaskState state) throws IOException {
         var endpointUrl = getRestApiUrl("issues", task.getId(), "state-transitions");
         var req = new HttpPost(endpointUrl);
         req.setEntity(new StringEntity(gson.toJson(new StateTransitionData(state.getId()))));
@@ -166,17 +202,6 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         return STATE_UPDATING + BASIC_HTTP_AUTHORIZATION + NATIVE_SEARCH;
     }
 
-    @Override
-    public boolean isConfigured() {
-        if (!super.isConfigured()) {
-            return false;
-        }
-        if (StringUtil.isEmpty(getPassword())) {
-            return false;
-        }
-        return true;
-    }
-
     private Task[] findIssues(String query, int offset, int limit, boolean withClosed) throws IOException {
         offset = Math.max(offset, 0);
         if (limit <= 0) {
@@ -184,13 +209,19 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         }
         limit = Math.min(limit, MAX_COUNT);
 
-        URI endpointUrl;
-        try {
+        // Which query to use?
+        if (!StringUtil.isEmpty(getSearchQuery())) {
+            query = getSearchQuery();
+        } else {
             if (StringUtil.isEmpty(query)) {
                 query = withClosed ? "" : "\"State\" is \"Open\"";
             } else {
                 query = " ~ \"" + query.replace("\"", "")  + "\" ~";
             }
+        }
+
+        URI endpointUrl;
+        try {
             endpointUrl = (new URIBuilder(getRestApiUrl("issues")))
                     .addParameter("query", query)
                     .addParameter("offset", String.valueOf(offset))
@@ -280,7 +311,9 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     }
 
     private void addAuthHeader(HttpRequest request) {
-        var usernamePassword = ("user:" + getPassword()).getBytes(StandardCharsets.UTF_8);
+        // 'user' is a placeholder when access token is used
+        String basicAuthUsername = isUseAccessToken() ? "user" : getUsername();
+        var usernamePassword = (basicAuthUsername + ":" + getPassword()).getBytes(StandardCharsets.UTF_8);
         request.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString(usernamePassword));
     }
 
