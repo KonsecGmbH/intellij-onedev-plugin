@@ -18,6 +18,7 @@ import org.junit.Test;
 import java.io.IOException;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Base64;
 import java.util.Optional;
 
@@ -152,6 +153,15 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
     }
 
     @Test
+    public void testConnectionUsernamePasswordInvalid() {
+        initRepository(false);
+        repository.setPassword(repository.getPassword() + "1");
+
+        Exception error = verifyConnection().orElse(null);
+        Assert.assertNotNull(error);
+    }
+
+    @Test
     public void testConnectionToken() {
         initRepository(true);
 
@@ -163,8 +173,18 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
     }
 
     @Test
+    public void testConnectionTokenInvalid() {
+        initRepository(true);
+        repository.setPassword(repository.getPassword() + "1");
+
+        Exception error = verifyConnection().orElse(null);
+        Assert.assertNotNull(error);
+    }
+
+    @Test
     public void testOneDevApiOperations() throws IOException {
         initRepository(true);
+        var progress = new AbstractProgressIndicatorBase();
 
         var projects = repository.loadProjects();
         if (projects.isEmpty()) {
@@ -172,13 +192,13 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
         }
         projects = repository.loadProjects();
 
-        var issues = repository.getIssues(null, 0, 100, false, new AbstractProgressIndicatorBase());
+        var issues = repository.getIssues(null, 0, 100, false, progress);
         if (issues.length == 0) {
             initTestIssues(projects.get(0));
         }
 
         // Get issues
-        issues = repository.getIssues(null, 0, 100, false, new AbstractProgressIndicatorBase());
+        issues = repository.getIssues(null, 0, 100, true, progress);
         Assert.assertTrue(issues.length > 0);
 
         // Get issue comments
@@ -188,9 +208,22 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
         }
         Assert.assertTrue(totalComments > 0);
 
-        // Set task state
         var issue = issues[0];
+        // Filter by closed
+        var issueWasOpen = !issue.isClosed();
+        var foundBefore = Arrays.stream(repository.getIssues(null, 0, 100, false, progress))
+                .filter(t -> t.getId().equals(issue.getId()))
+                .findFirst();
+        Assert.assertEquals(issueWasOpen, foundBefore.isPresent());
+
+        // Set task state
         repository.setTaskState(issue, issue.isClosed() ? OneDevRepository.STATE_OPEN : OneDevRepository.STATE_CLOSED);
+
+        // Filter by closed after state change
+        var foundAfter = Arrays.stream(repository.getIssues(null, 0, 100, false, progress))
+                .filter(t -> t.getId().equals(issue.getId()))
+                .findFirst();
+        Assert.assertEquals(!issueWasOpen, foundAfter.isPresent());
 
         // Find task
         var foundTask = repository.findTask(issue.getSummary());

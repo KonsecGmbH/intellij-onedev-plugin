@@ -35,13 +35,16 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class OneDevRepository extends NewBaseRepositoryImpl {
     public static final Gson gson = TaskGsonUtil.createDefaultBuilder().create();
 
     public static final int MAX_COUNT = 100;
+    public static final int MAX_PROJECTS_TO_LOAD = 500;
 
     public static final CustomTaskState STATE_OPEN = new CustomTaskState("Open", "Open");
     public static final CustomTaskState STATE_CLOSED = new CustomTaskState("Closed", "Closed");
@@ -52,6 +55,8 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     };
     private static final TypeToken<List<OneDevProject>> LIST_OF_PROJECTS_TYPE = new TypeToken<>() {
     };
+
+    private final Map<Integer, OneDevProject> cachedProjects = new ConcurrentHashMap<>();
 
     private boolean useAccessToken;
     private String searchQuery;
@@ -187,7 +192,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
 
     @Override
     public void setTaskState(@NotNull Task task, @NotNull CustomTaskState state) throws IOException {
-        var endpointUrl = getRestApiUrl("issues", task.getId(), "state-transitions");
+        var endpointUrl = getRestApiUrl("issues", task.getNumber(), "state-transitions");
         var req = new HttpPost(endpointUrl);
         req.setEntity(new StringEntity(gson.toJson(new StateTransitionData(state.getId()))));
         req.addHeader("Content-Type", "application/json");
@@ -219,6 +224,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
                 query = " ~ \"" + query.replace("\"", "")  + "\" ~";
             }
         }
+        System.err.println("Query is " + query);
 
         URI endpointUrl;
         try {
@@ -234,14 +240,47 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         addAuthHeader(req);
 
         List<OneDevTask> tasks = getHttpClient().execute(req, new TaskResponseUtil.GsonMultipleObjectsDeserializer<>(gson, LIST_OF_TASKS_TYPE));
-        return ContainerUtil.map2Array(tasks, OneDevTaskImpl.class, (task) -> new OneDevTaskImpl(this, task));
+        if (!withClosed) {
+            tasks = tasks.stream().filter(t -> !STATE_CLOSED.getId().equals(t.state)).collect(Collectors.toList());
+        }
+        return ContainerUtil.map2Array(tasks, OneDevTaskImpl.class, (task) -> new OneDevTaskImpl(this, task, getProject(task.projectId)));
+    }
+
+    private OneDevProject getProject(int projectId) {
+        var project = cachedProjects.get(projectId);
+        if (project == null) {
+            for (int i = 0; i < MAX_PROJECTS_TO_LOAD / MAX_COUNT; i++) {
+                try {
+                    var projects = loadProjects(i * MAX_COUNT);
+                    projects.forEach(proj -> cachedProjects.put(proj.id, proj));
+                    if (projects.size() < MAX_COUNT) {
+                        break;
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+
+        project = cachedProjects.get(projectId);
+        if (project == null) {
+            // Create placeholder project
+            project = new OneDevProject();
+            project.id = projectId;
+            project.name = String.valueOf(projectId);
+        }
+        return project;
     }
 
     public List<OneDevProject> loadProjects() throws IOException {
+        return loadProjects(0);
+    }
+
+    private List<OneDevProject> loadProjects(int offset) throws IOException {
         URI endpointUrl;
         try {
             endpointUrl = (new URIBuilder(getRestApiUrl("projects")))
-                    .addParameter("offset", String.valueOf(0))
+                    .addParameter("offset", String.valueOf(offset))
                     .addParameter("count", String.valueOf(MAX_COUNT))
                     .build();
         } catch (URISyntaxException e) {
@@ -284,7 +323,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     }
 
     Comment[] getComments(OneDevTaskImpl task) throws IOException {
-        var endpointUrl = getRestApiUrl("issues", task.getId(), "comments");
+        var endpointUrl = getRestApiUrl("issues", task.getNumber(), "comments");
         var req = new HttpGet(endpointUrl);
         addAuthHeader(req);
 

@@ -1,10 +1,12 @@
 package com.konsec.intellij;
 
 import com.intellij.openapi.util.IconLoader;
+import com.intellij.openapi.util.NlsSafe;
 import com.intellij.tasks.Comment;
 import com.intellij.tasks.Task;
 import com.intellij.tasks.TaskRepository;
 import com.intellij.tasks.TaskType;
+import com.konsec.intellij.model.OneDevProject;
 import com.konsec.intellij.model.OneDevTask;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -13,21 +15,26 @@ import javax.swing.*;
 import java.util.Date;
 
 public class OneDevTaskImpl extends Task implements Comparable<OneDevTaskImpl> {
-    private final String project;
+    private final OneDevProject project;
     private final OneDevRepository repository;
     private Comment[] comments;
     final OneDevTask task;
 
-    OneDevTaskImpl(@NotNull OneDevRepository repository, @NotNull OneDevTask task) {
+    OneDevTaskImpl(@NotNull OneDevRepository repository, @NotNull OneDevTask task, @NotNull OneDevProject project) {
         this.repository = repository;
         this.task = task;
-        this.project = String.valueOf(task.projectId);
+        this.project = project;
     }
 
     @NotNull
     @Override
     public String getId() {
-        return String.valueOf(task.id);
+        return project.name + "-" + task.number;
+    }
+
+    @Override
+    public @NotNull String getNumber() {
+        return String.valueOf(task.number);
     }
 
     @NotNull
@@ -101,7 +108,8 @@ public class OneDevTaskImpl extends Task implements Comparable<OneDevTaskImpl> {
     @Nullable
     @Override
     public String getIssueUrl() {
-        return repository.getUrl() + "/" + project + "/~issues/" + task.id;
+        // http://127.0.0.1:6610/proj/~issues/1
+        return repository.getUrl() + "/" + project.name + "/~issues/" + task.number;
     }
 
     @Override

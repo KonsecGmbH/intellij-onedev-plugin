@@ -5,6 +5,7 @@ import java.util.Date;
 public class OneDevTask {
     public int projectId;
     public int id;
+    public int number;
     public String title;
     public String description;
     public boolean confidential;

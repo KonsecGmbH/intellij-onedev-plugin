@@ -1,7 +1,6 @@
 package com.konsec.intellij;
 
 import com.intellij.openapi.project.Project;
-import com.intellij.tasks.TaskApiBundle;
 import com.intellij.tasks.TaskBundle;
 import com.intellij.tasks.config.BaseRepositoryEditor;
 import com.intellij.ui.components.JBLabel;
@@ -19,10 +18,6 @@ public class OneDevRepositoryEditor extends BaseRepositoryEditor<OneDevRepositor
 
     public OneDevRepositoryEditor(Project project, OneDevRepository repository, Consumer<? super OneDevRepository> changeListener) {
         super(project, repository, changeListener);
-        this.myPasswordLabel.setText(TaskBundle.message("label.api.token"));
-
-        this.myUserNameText.setVisible(false);
-        this.myUsernameLabel.setVisible(false);
     }
 
     @Override
@@ -30,6 +25,7 @@ public class OneDevRepositoryEditor extends BaseRepositoryEditor<OneDevRepositor
         myRepository.setSearchQuery(mySearchQueryField.getText());
         myRepository.setUseAccessToken(myUseAccessTokenAuthenticationCheckBox.isSelected());
         super.apply();
+        adjustSettingsForServerProperties();
     }
 
     @Override
@@ -37,7 +33,7 @@ public class OneDevRepositoryEditor extends BaseRepositoryEditor<OneDevRepositor
         mySearchQueryField = new JBTextField(myRepository.getSearchQuery());
         installListener(mySearchQueryField);
         mySearchLabel = new JBLabel(TaskBundle.message("label.search"), SwingConstants.RIGHT);
-        myUseAccessTokenAuthenticationCheckBox = new JCheckBox(TaskApiBundle.message("use.personal.access.token"));
+        myUseAccessTokenAuthenticationCheckBox = new JCheckBox("Use access token");
         myUseAccessTokenAuthenticationCheckBox.setSelected(myRepository.isUseAccessToken());
         myUseAccessTokenAuthenticationCheckBox.addActionListener(e -> useAccessTokenChanged());
 
@@ -46,6 +42,12 @@ public class OneDevRepositoryEditor extends BaseRepositoryEditor<OneDevRepositor
                 .addComponentToRightColumn(myUseAccessTokenAuthenticationCheckBox)
                 .addLabeledComponent(mySearchLabel, mySearchQueryField)
                 .getPanel();
+    }
+
+    @Override
+    public void setAnchor(JComponent anchor) {
+        super.setAnchor(anchor);
+        mySearchLabel.setAnchor(anchor);
     }
 
     protected void useAccessTokenChanged() {
