@@ -35,13 +35,16 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class OneDevRepository extends NewBaseRepositoryImpl {
     public static final Gson gson = TaskGsonUtil.createDefaultBuilder().create();
 
     public static final int MAX_COUNT = 100;
+    public static final int MAX_PROJECTS_TO_LOAD = 500;
 
     public static final CustomTaskState STATE_OPEN = new CustomTaskState("Open", "Open");
     public static final CustomTaskState STATE_CLOSED = new CustomTaskState("Closed", "Closed");
@@ -53,15 +56,16 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     private static final TypeToken<List<OneDevProject>> LIST_OF_PROJECTS_TYPE = new TypeToken<>() {
     };
 
+    private final Map<Integer, OneDevProject> cachedProjects = new ConcurrentHashMap<>();
+
+    private boolean useAccessToken;
+    private String searchQuery;
+
     private HttpClient httpClient;
 
-    private boolean assigned = false;
-
-    public OneDevRepository(String url, String token, HttpClient httpClient) {
+    public OneDevRepository(HttpClient httpClient) {
         this();
 
-        setUrl(url);
-        setPassword(token);
         this.httpClient = httpClient;
 
         init();
@@ -74,8 +78,11 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
 
     public OneDevRepository(OneDevRepository other) {
         super(other);
+        setUsername(other.getUsername());
         setPassword(other.getPassword());
-        assigned = other.assigned;
+        setUseAccessToken(other.isUseAccessToken());
+        setSearchQuery(other.getSearchQuery());
+
         init();
     }
 
@@ -84,14 +91,48 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         setPreferredCloseTaskState(STATE_CLOSED);
     }
 
+    public boolean isUseAccessToken() {
+        return useAccessToken;
+    }
+
+    public void setUseAccessToken(boolean useAccessToken) {
+        this.useAccessToken = useAccessToken;
+    }
+
+    public String getSearchQuery() {
+        return searchQuery;
+    }
+
+    public void setSearchQuery(String searchQuery) {
+        this.searchQuery = searchQuery;
+    }
+
+    @Override
+    public boolean isConfigured() {
+        // URL is always required
+        if (!super.isConfigured()) {
+            return false;
+        }
+        // Password (token) too
+        if (StringUtil.isEmpty(getPassword())) {
+            return false;
+        }
+        // Username only if access token is not used
+        if (!isUseAccessToken() && StringUtil.isEmpty(getUsername())) {
+            return false;
+        }
+        return true;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof OneDevRepository other)) {
             return false;
         }
         return Objects.equals(getPassword(), other.getPassword()) &&
-                Objects.equals(getUrl(), other.getUrl()) &&
-                Objects.equals(assigned, other.assigned);
+                Objects.equals(isUseAccessToken(), other.isUseAccessToken()) &&
+                Objects.equals(getSearchQuery(), other.getSearchQuery()) &&
+                Objects.equals(getUrl(), other.getUrl());
     }
 
     @NotNull
@@ -129,7 +170,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     }
 
     @Override
-    public Task[] getIssues(@Nullable String query, int offset, int limit, boolean withClosed, @NotNull ProgressIndicator cancelled) throws Exception {
+    public Task[] getIssues(@Nullable String query, int offset, int limit, boolean withClosed, @NotNull ProgressIndicator cancelled) throws IOException {
         return findIssues(query, offset, limit, withClosed);
     }
 
@@ -150,8 +191,8 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     }
 
     @Override
-    public void setTaskState(@NotNull Task task, @NotNull CustomTaskState state) throws Exception {
-        var endpointUrl = getRestApiUrl("issues", task.getId(), "state-transitions");
+    public void setTaskState(@NotNull Task task, @NotNull CustomTaskState state) throws IOException {
+        var endpointUrl = getRestApiUrl("issues", task.getNumber(), "state-transitions");
         var req = new HttpPost(endpointUrl);
         req.setEntity(new StringEntity(gson.toJson(new StateTransitionData(state.getId()))));
         req.addHeader("Content-Type", "application/json");
@@ -166,17 +207,6 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         return STATE_UPDATING + BASIC_HTTP_AUTHORIZATION + NATIVE_SEARCH;
     }
 
-    @Override
-    public boolean isConfigured() {
-        if (!super.isConfigured()) {
-            return false;
-        }
-        if (StringUtil.isEmpty(getPassword())) {
-            return false;
-        }
-        return true;
-    }
-
     private Task[] findIssues(String query, int offset, int limit, boolean withClosed) throws IOException {
         offset = Math.max(offset, 0);
         if (limit <= 0) {
@@ -184,13 +214,20 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         }
         limit = Math.min(limit, MAX_COUNT);
 
-        URI endpointUrl;
-        try {
+        // Which query to use?
+        if (!StringUtil.isEmpty(getSearchQuery())) {
+            query = getSearchQuery();
+        } else {
             if (StringUtil.isEmpty(query)) {
                 query = withClosed ? "" : "\"State\" is \"Open\"";
             } else {
                 query = " ~ \"" + query.replace("\"", "")  + "\" ~";
             }
+        }
+        System.err.println("Query is " + query);
+
+        URI endpointUrl;
+        try {
             endpointUrl = (new URIBuilder(getRestApiUrl("issues")))
                     .addParameter("query", query)
                     .addParameter("offset", String.valueOf(offset))
@@ -202,15 +239,48 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         var req = new HttpGet(endpointUrl);
         addAuthHeader(req);
 
-        List<OneDevTask> tasks = (List<OneDevTask>) getHttpClient().execute(req, new TaskResponseUtil.GsonMultipleObjectsDeserializer(gson, LIST_OF_TASKS_TYPE));
-        return ContainerUtil.map2Array(tasks, OneDevTaskImpl.class, (task) -> new OneDevTaskImpl(this, task));
+        List<OneDevTask> tasks = getHttpClient().execute(req, new TaskResponseUtil.GsonMultipleObjectsDeserializer<>(gson, LIST_OF_TASKS_TYPE));
+        if (!withClosed) {
+            tasks = tasks.stream().filter(t -> !STATE_CLOSED.getId().equals(t.state)).collect(Collectors.toList());
+        }
+        return ContainerUtil.map2Array(tasks, OneDevTaskImpl.class, (task) -> new OneDevTaskImpl(this, task, getProject(task.projectId)));
+    }
+
+    private OneDevProject getProject(int projectId) {
+        var project = cachedProjects.get(projectId);
+        if (project == null) {
+            for (int i = 0; i < MAX_PROJECTS_TO_LOAD / MAX_COUNT; i++) {
+                try {
+                    var projects = loadProjects(i * MAX_COUNT);
+                    projects.forEach(proj -> cachedProjects.put(proj.id, proj));
+                    if (projects.size() < MAX_COUNT) {
+                        break;
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+
+        project = cachedProjects.get(projectId);
+        if (project == null) {
+            // Create placeholder project
+            project = new OneDevProject();
+            project.id = projectId;
+            project.name = String.valueOf(projectId);
+        }
+        return project;
     }
 
     public List<OneDevProject> loadProjects() throws IOException {
+        return loadProjects(0);
+    }
+
+    private List<OneDevProject> loadProjects(int offset) throws IOException {
         URI endpointUrl;
         try {
             endpointUrl = (new URIBuilder(getRestApiUrl("projects")))
-                    .addParameter("offset", String.valueOf(0))
+                    .addParameter("offset", String.valueOf(offset))
                     .addParameter("count", String.valueOf(MAX_COUNT))
                     .build();
         } catch (URISyntaxException e) {
@@ -219,7 +289,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         var req = new HttpGet(endpointUrl);
         addAuthHeader(req);
 
-        return (List<OneDevProject>) getHttpClient().execute(req, new TaskResponseUtil.GsonMultipleObjectsDeserializer(gson, LIST_OF_PROJECTS_TYPE));
+        return getHttpClient().execute(req, new TaskResponseUtil.GsonMultipleObjectsDeserializer<>(gson, LIST_OF_PROJECTS_TYPE));
     }
 
     public int createProject(OneDevProject project) throws IOException {
@@ -253,11 +323,11 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     }
 
     Comment[] getComments(OneDevTaskImpl task) throws IOException {
-        var endpointUrl = getRestApiUrl("issues", task.getId(), "comments");
+        var endpointUrl = getRestApiUrl("issues", task.getNumber(), "comments");
         var req = new HttpGet(endpointUrl);
         addAuthHeader(req);
 
-        List<OneDevComment> comments = (List<OneDevComment>) getHttpClient().execute(req, new TaskResponseUtil.GsonMultipleObjectsDeserializer(gson, LIST_OF_COMMENTS_TYPE));
+        List<OneDevComment> comments = getHttpClient().execute(req, new TaskResponseUtil.GsonMultipleObjectsDeserializer<>(gson, LIST_OF_COMMENTS_TYPE));
         return ContainerUtil.map2Array(comments, Comment.class, (comment) -> new SimpleComment(comment.date, getUserName(comment.userId), comment.content));
     }
 
@@ -280,7 +350,9 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     }
 
     private void addAuthHeader(HttpRequest request) {
-        var usernamePassword = ("user:" + getPassword()).getBytes(StandardCharsets.UTF_8);
+        // 'user' is a placeholder when access token is used
+        String basicAuthUsername = isUseAccessToken() ? "user" : getUsername();
+        var usernamePassword = (basicAuthUsername + ":" + getPassword()).getBytes(StandardCharsets.UTF_8);
         request.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString(usernamePassword));
     }
 
