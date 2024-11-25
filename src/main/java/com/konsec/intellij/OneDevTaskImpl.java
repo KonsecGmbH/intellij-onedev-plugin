@@ -1,7 +1,6 @@
 package com.konsec.intellij;
 
 import com.intellij.openapi.util.IconLoader;
-import com.intellij.openapi.util.NlsSafe;
 import com.intellij.tasks.Comment;
 import com.intellij.tasks.Task;
 import com.intellij.tasks.TaskRepository;
