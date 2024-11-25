@@ -19,3 +19,6 @@ In addition to default testing routines coming with the plugin template, there a
 running against the OneDev Docker image integrated into thr `build.yml` pipeline. How to run locally:
 - Run `onedev.sh` to launch the Docker image
 - Run `OneDevRepositoryTest.java`
+
+## Q:
+- Do we need automated upload?

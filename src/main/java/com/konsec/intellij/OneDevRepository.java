@@ -202,7 +202,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         var req = new HttpGet(endpointUrl);
         addAuthHeader(req);
 
-        List<OneDevTask> tasks = (List<OneDevTask>) getHttpClient().execute(req, new TaskResponseUtil.GsonMultipleObjectsDeserializer(gson, LIST_OF_TASKS_TYPE));
+        List<OneDevTask> tasks = getHttpClient().execute(req, new TaskResponseUtil.GsonMultipleObjectsDeserializer<>(gson, LIST_OF_TASKS_TYPE));
         return ContainerUtil.map2Array(tasks, OneDevTaskImpl.class, (task) -> new OneDevTaskImpl(this, task));
     }
 
@@ -219,7 +219,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         var req = new HttpGet(endpointUrl);
         addAuthHeader(req);
 
-        return (List<OneDevProject>) getHttpClient().execute(req, new TaskResponseUtil.GsonMultipleObjectsDeserializer(gson, LIST_OF_PROJECTS_TYPE));
+        return getHttpClient().execute(req, new TaskResponseUtil.GsonMultipleObjectsDeserializer<>(gson, LIST_OF_PROJECTS_TYPE));
     }
 
     public int createProject(OneDevProject project) throws IOException {
@@ -257,7 +257,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         var req = new HttpGet(endpointUrl);
         addAuthHeader(req);
 
-        List<OneDevComment> comments = (List<OneDevComment>) getHttpClient().execute(req, new TaskResponseUtil.GsonMultipleObjectsDeserializer(gson, LIST_OF_COMMENTS_TYPE));
+        List<OneDevComment> comments = getHttpClient().execute(req, new TaskResponseUtil.GsonMultipleObjectsDeserializer<>(gson, LIST_OF_COMMENTS_TYPE));
         return ContainerUtil.map2Array(comments, Comment.class, (comment) -> new SimpleComment(comment.date, getUserName(comment.userId), comment.content));
     }
 
