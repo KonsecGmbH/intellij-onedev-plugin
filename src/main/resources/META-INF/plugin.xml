@@ -3,7 +3,9 @@
     <id>onedev-tasks</id>
     <name>OneDev Tasks</name>
     <vendor>Konsec GmbH</vendor>
-
+    <description>
+        This plugin allows you to connect to OneDev [https://onedev.io] instances, search, retrieve and update Tasks/Issues from it.
+    </description>
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.tasks</depends>
 

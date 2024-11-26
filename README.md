@@ -5,7 +5,7 @@
 [![Downloads](https://img.shields.io/jetbrains/plugin/d/MARKETPLACE_ID.svg)](https://plugins.jetbrains.com/plugin/MARKETPLACE_ID)
 
 <!-- Plugin description -->
-This plugin allows you to connect to OneDev [https://onedev.io] instances and retieve Tasks from it. 
+This plugin allows you to connect to OneDev [https://onedev.io] instances, search, retrieve and update Tasks/Issues from it. 
 
 <!-- Plugin description end -->
 
