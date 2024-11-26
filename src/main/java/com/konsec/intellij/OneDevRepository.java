@@ -13,6 +13,7 @@ import com.intellij.tasks.impl.gson.TaskGsonUtil;
 import com.intellij.tasks.impl.httpclient.NewBaseRepositoryImpl;
 import com.intellij.tasks.impl.httpclient.TaskResponseUtil;
 import com.intellij.util.containers.ContainerUtil;
+import com.intellij.util.net.ssl.CertificateManager;
 import com.konsec.intellij.model.OneDevComment;
 import com.konsec.intellij.model.OneDevProject;
 import com.konsec.intellij.model.OneDevTask;
@@ -25,15 +26,27 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.conn.ssl.TrustSelfSignedStrategy;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.ssl.SSLContexts;
 import org.apache.http.util.EntityUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import javax.net.ssl.SSLContext;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.security.UnrecoverableKeyException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
@@ -60,6 +73,9 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
 
     private boolean useAccessToken;
     private String searchQuery;
+    private boolean useMutualTls;
+    private String mutualTlsCertificatePath;
+    private String mutualTlsCertificatePassword;
 
     private HttpClient httpClient;
 
@@ -107,6 +123,30 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         this.searchQuery = searchQuery;
     }
 
+    public boolean isUseMutualTls() {
+        return useMutualTls;
+    }
+
+    public void setUseMutualTls(boolean useMutualTls) {
+        this.useMutualTls = useMutualTls;
+    }
+
+    public String getMutualTlsCertificatePath() {
+        return mutualTlsCertificatePath;
+    }
+
+    public void setMutualTlsCertificatePath(String mutualTlsCertificatePath) {
+        this.mutualTlsCertificatePath = mutualTlsCertificatePath;
+    }
+
+    public String getMutualTlsCertificatePassword() {
+        return mutualTlsCertificatePassword;
+    }
+
+    public void setMutualTlsCertificatePassword(String mutualTlsCertificatePassword) {
+        this.mutualTlsCertificatePassword = mutualTlsCertificatePassword;
+    }
+
     @Override
     public boolean isConfigured() {
         // URL is always required
@@ -120,6 +160,12 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         // Username only if access token is not used
         if (!isUseAccessToken() && StringUtil.isEmpty(getUsername())) {
             return false;
+        }
+        // Password and path are required for mTLS
+        if (isUseMutualTls()) {
+            if (StringUtil.isEmpty(getMutualTlsCertificatePassword()) || StringUtil.isEmpty(getMutualTlsCertificatePath())) {
+                return false;
+            }
         }
         return true;
     }
@@ -144,9 +190,35 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     @Override
     protected @NotNull HttpClient getHttpClient() {
         if (httpClient == null) {
-            httpClient = super.getHttpClient();
+            if (!useMutualTls) {
+                httpClient = super.getHttpClient();
+            } else {
+                HttpClientBuilder builder = HttpClients.custom()
+                        .setDefaultRequestConfig(createRequestConfig())
+                        .setSSLContext(createMutualTlsContext())
+                        //.setDefaultCredentialsProvider(createCredentialsProvider())
+                        //.addInterceptorFirst(PREEMPTIVE_BASIC_AUTH)
+                        .addInterceptorLast(createRequestInterceptor());
+                httpClient = builder.build();
+            }
         }
         return httpClient;
+    }
+
+    private SSLContext createMutualTlsContext() {
+        try {
+            KeyStore trustStore = KeyStore.getInstance("pkcs12");
+            String password = getMutualTlsCertificatePassword();
+            try (InputStream fis = new FileInputStream(getMutualTlsCertificatePath())) {
+                trustStore.load(fis, password.toCharArray());
+            }
+            return SSLContexts.custom()
+                    .loadKeyMaterial(trustStore, password.toCharArray(), (map, socket) -> "client")
+                    .loadTrustMaterial(trustStore, new TrustSelfSignedStrategy())
+                    .build();
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Nullable
