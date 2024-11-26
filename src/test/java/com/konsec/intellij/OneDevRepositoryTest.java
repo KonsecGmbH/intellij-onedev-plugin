@@ -15,6 +15,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
@@ -27,6 +28,7 @@ import static com.konsec.intellij.OneDevRepository.gson;
 public class OneDevRepositoryTest extends BasePlatformTestCase {
 
     private static String URL;
+    private static String MTLS_URL;
     private static String TOKEN;
     private static String USERNAME;
     private static String PASSWORD;
@@ -44,6 +46,7 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
         }
 
         URL = getenv("ONEDEV_URL", "http://127.0.0.1:6610/");
+        MTLS_URL = getenv("ONEDEV_MTLS_URL", "https://127.0.0.1:8443/");
         USERNAME = getenv("ONEDEV_USERNAME", "test");
         PASSWORD = getenv("ONEDEV_PASSWORD", "test");
 
@@ -123,11 +126,17 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
         setUpOneDev();
     }
 
-    private void initRepository(boolean useAccessToken) {
-        var httpClient = HttpClientBuilder.create().build();
-        repository = new OneDevRepository(httpClient);
+    private void initRepository(boolean useAccessToken, boolean useMutualTls) {
+        repository = new OneDevRepository();
         repository.setUseAccessToken(useAccessToken);
-        repository.setUrl(URL);
+        if (useMutualTls) {
+            repository.setUseMutualTls(true);
+            repository.setMutualTlsCertificatePassword("test");
+            repository.setMutualTlsCertificatePath(new File("src/test/docker/certs/client.pfx").getAbsolutePath());
+            repository.setUrl(MTLS_URL);
+        } else {
+            repository.setUrl(URL);
+        }
         if (useAccessToken) {
             repository.setPassword(TOKEN);
         } else {
@@ -142,8 +151,21 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
     }
 
     @Test
+    public void testConnectionMutualTls() {
+        initRepository(false, true);
+        Assert.assertTrue(repository.isUseMutualTls());
+        Assert.assertTrue(repository.getUrl().startsWith("https://"));
+
+        Exception error = verifyConnection().orElse(null);
+        if (error != null) {
+            error.printStackTrace();
+        }
+        Assert.assertNull(error);
+    }
+
+    @Test
     public void testConnectionUsernamePassword() {
-        initRepository(false);
+        initRepository(false, false);
 
         Exception error = verifyConnection().orElse(null);
         if (error != null) {
@@ -154,7 +176,7 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
 
     @Test
     public void testConnectionUsernamePasswordInvalid() {
-        initRepository(false);
+        initRepository(false, false);
         repository.setPassword(repository.getPassword() + "1");
 
         Exception error = verifyConnection().orElse(null);
@@ -163,7 +185,7 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
 
     @Test
     public void testConnectionToken() {
-        initRepository(true);
+        initRepository(true, false);
 
         Exception error = verifyConnection().orElse(null);
         if (error != null) {
@@ -174,7 +196,7 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
 
     @Test
     public void testConnectionTokenInvalid() {
-        initRepository(true);
+        initRepository(true, false);
         repository.setPassword(repository.getPassword() + "1");
 
         Exception error = verifyConnection().orElse(null);
@@ -183,7 +205,7 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
 
     @Test
     public void testOneDevApiOperations() throws IOException {
-        initRepository(true);
+        initRepository(true, false);
         var progress = new AbstractProgressIndicatorBase();
 
         var projects = repository.loadProjects();

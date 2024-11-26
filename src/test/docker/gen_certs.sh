@@ -18,7 +18,7 @@ openssl req -newkey rsa:2048 -nodes -keyout certs/client.key -out certs/client.r
 openssl x509 -req -in certs/server.req -days 1000 -CA certs/server-ca.crt -CAkey certs/server-ca.key -set_serial 01 -out certs/server.crt -extfile localhost.ext
 openssl x509 -req -in certs/client.req -days 1000 -CA certs/client-ca.crt -CAkey certs/client-ca.key -set_serial 01 -out certs/client.crt
 
-# Create PFX
+# Create client PFX
 openssl pkcs12 -export -out certs/client.pfx -inkey certs/client.key -in certs/client.crt -password pass:test
 
 # Clean up
