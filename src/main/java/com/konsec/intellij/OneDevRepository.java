@@ -25,15 +25,24 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.conn.ssl.NoopHostnameVerifier;
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.conn.ssl.TrustAllStrategy;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.ssl.SSLContexts;
 import org.apache.http.util.EntityUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
+import java.security.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
@@ -60,16 +69,11 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
 
     private boolean useAccessToken;
     private String searchQuery;
+    private boolean useMutualTls;
+    private String mutualTlsCertificatePath;
+    private String mutualTlsCertificatePassword;
 
     private HttpClient httpClient;
-
-    public OneDevRepository(HttpClient httpClient) {
-        this();
-
-        this.httpClient = httpClient;
-
-        init();
-    }
 
     public OneDevRepository() {
         super(new OneDevRepositoryType());
@@ -78,10 +82,14 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
 
     public OneDevRepository(OneDevRepository other) {
         super(other);
+
         setUsername(other.getUsername());
         setPassword(other.getPassword());
         setUseAccessToken(other.isUseAccessToken());
         setSearchQuery(other.getSearchQuery());
+        setUseMutualTls(other.isUseMutualTls());
+        setMutualTlsCertificatePassword(other.getMutualTlsCertificatePassword());
+        setMutualTlsCertificatePath(other.getMutualTlsCertificatePath());
 
         init();
     }
@@ -107,6 +115,33 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         this.searchQuery = searchQuery;
     }
 
+    public boolean isUseMutualTls() {
+        return useMutualTls;
+    }
+
+    public void setUseMutualTls(boolean useMutualTls) {
+        this.useMutualTls = useMutualTls;
+        this.httpClient = null;
+    }
+
+    public String getMutualTlsCertificatePath() {
+        return mutualTlsCertificatePath;
+    }
+
+    public void setMutualTlsCertificatePath(String mutualTlsCertificatePath) {
+        this.mutualTlsCertificatePath = mutualTlsCertificatePath;
+        this.httpClient = null;
+    }
+
+    public String getMutualTlsCertificatePassword() {
+        return mutualTlsCertificatePassword;
+    }
+
+    public void setMutualTlsCertificatePassword(String mutualTlsCertificatePassword) {
+        this.mutualTlsCertificatePassword = mutualTlsCertificatePassword;
+        this.httpClient = null;
+    }
+
     @Override
     public boolean isConfigured() {
         // URL is always required
@@ -121,6 +156,12 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         if (!isUseAccessToken() && StringUtil.isEmpty(getUsername())) {
             return false;
         }
+        // Password and path are required for mTLS
+        if (isUseMutualTls()) {
+            if (StringUtil.isEmpty(getMutualTlsCertificatePassword()) || StringUtil.isEmpty(getMutualTlsCertificatePath())) {
+                return false;
+            }
+        }
         return true;
     }
 
@@ -132,6 +173,9 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         return Objects.equals(getPassword(), other.getPassword()) &&
                 Objects.equals(isUseAccessToken(), other.isUseAccessToken()) &&
                 Objects.equals(getSearchQuery(), other.getSearchQuery()) &&
+                Objects.equals(isUseMutualTls(), other.isUseMutualTls()) &&
+                Objects.equals(getMutualTlsCertificatePassword(), other.getMutualTlsCertificatePassword()) &&
+                Objects.equals(getMutualTlsCertificatePath(), other.getMutualTlsCertificatePath()) &&
                 Objects.equals(getUrl(), other.getUrl());
     }
 
@@ -144,9 +188,39 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     @Override
     protected @NotNull HttpClient getHttpClient() {
         if (httpClient == null) {
-            httpClient = super.getHttpClient();
+            if (!useMutualTls) {
+                httpClient = super.getHttpClient();
+            } else {
+                HttpClientBuilder builder = HttpClients.custom()
+                        .setDefaultRequestConfig(createRequestConfig())
+                        .setSSLHostnameVerifier(new NoopHostnameVerifier())
+                        .setSSLSocketFactory(createMutualTlsSocketFactory());
+                httpClient = builder.build();
+            }
         }
         return httpClient;
+    }
+
+    private SSLConnectionSocketFactory createMutualTlsSocketFactory() {
+        try {
+            KeyStore trustStore = KeyStore.getInstance("pkcs12");
+            var password = getMutualTlsCertificatePassword().toCharArray();
+            try (InputStream fis = new FileInputStream(getMutualTlsCertificatePath())) {
+                trustStore.load(fis, password);
+            }
+            var alias = trustStore.aliases().nextElement();
+            var sslContext = SSLContexts.custom()
+                    // mTLS
+                    .loadKeyMaterial(trustStore, password, (map, socket) -> alias)
+                    // Trust any server certificate
+                    .loadTrustMaterial(new TrustAllStrategy())
+                    .build();
+
+            // Do not verify hostname
+            return new SSLConnectionSocketFactory(sslContext, new NoopHostnameVerifier());
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     @Nullable
@@ -224,7 +298,6 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
                 query = " ~ \"" + query.replace("\"", "")  + "\" ~";
             }
         }
-        System.err.println("Query is " + query);
 
         URI endpointUrl;
         try {
