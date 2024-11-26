@@ -18,6 +18,8 @@ public class OneDevRepositoryEditor extends BaseRepositoryEditor<OneDevRepositor
 
     public OneDevRepositoryEditor(Project project, OneDevRepository repository, Consumer<? super OneDevRepository> changeListener) {
         super(project, repository, changeListener);
+
+        myUseHttpAuthenticationCheckBox.setVisible(false);
     }
 
     @Override
@@ -34,8 +36,8 @@ public class OneDevRepositoryEditor extends BaseRepositoryEditor<OneDevRepositor
         installListener(mySearchQueryField);
         mySearchLabel = new JBLabel(TaskBundle.message("label.search"), SwingConstants.RIGHT);
         myUseAccessTokenAuthenticationCheckBox = new JCheckBox("Use access token");
-        myUseAccessTokenAuthenticationCheckBox.setSelected(myRepository.isUseAccessToken());
         myUseAccessTokenAuthenticationCheckBox.addActionListener(e -> useAccessTokenChanged());
+        myUseAccessTokenAuthenticationCheckBox.setSelected(myRepository.isUseAccessToken());
 
         adjustSettingsForServerProperties();
         return FormBuilder.createFormBuilder()
