@@ -79,14 +79,6 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
 
     private HttpClient httpClient;
 
-    public OneDevRepository(HttpClient httpClient) {
-        this();
-
-        this.httpClient = httpClient;
-
-        init();
-    }
-
     public OneDevRepository() {
         super(new OneDevRepositoryType());
         init();
