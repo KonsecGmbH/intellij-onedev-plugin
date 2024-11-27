@@ -10,6 +10,7 @@ import com.intellij.util.ui.GridBag;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.ActionEvent;
 
 // See JiraRepositoryEditor
 public class OneDevRepositoryEditor extends BaseRepositoryEditor<OneDevRepository> {
@@ -18,6 +19,7 @@ public class OneDevRepositoryEditor extends BaseRepositoryEditor<OneDevRepositor
     private JBCheckBox myUseAccessTokenAuthenticationCheckBox;
     private JBCheckBox myUseMutualTls;
     private JBTextField myMutualTlsFile;
+    private JButton mySelectTlsFile;
     private JBPasswordField myMutualTlsPassword;
 
     public OneDevRepositoryEditor(Project project, OneDevRepository repository, Consumer<? super OneDevRepository> changeListener) {
@@ -60,11 +62,18 @@ public class OneDevRepositoryEditor extends BaseRepositoryEditor<OneDevRepositor
         myMutualTlsFile = new JBTextField(myRepository.getMutualTlsCertificatePath());
         myMutualTlsFile.getEmptyText().setText("P12 path");
         installListener(myMutualTlsFile);
+        mySelectTlsFile = new JButton("Select");
+        mySelectTlsFile.addActionListener(new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                selectPfxFile();
+            }
+        });
 
         JPanel mutualTlsPanel = new JPanel(new GridBagLayout());
         GridBag bag = new GridBag().setDefaultWeightX(1).setDefaultFill(GridBagConstraints.HORIZONTAL);
         mutualTlsPanel.add(myMutualTlsFile, bag.next().weightx(2));
-        //mutualTlsPanel.add(new JLabel("/"), bag.next().fillCellNone().insets(0, 1, 0, 1).weightx(0));
+        mutualTlsPanel.add(mySelectTlsFile, bag.next().fillCellNone().insets(0, 0, 0, 0).weightx(0));
         mutualTlsPanel.add(myMutualTlsPassword, bag.next());
 
         adjustSettingsForServerProperties();
@@ -102,9 +111,18 @@ public class OneDevRepositoryEditor extends BaseRepositoryEditor<OneDevRepositor
         if (myUseMutualTls.isSelected()) {
             myMutualTlsFile.setEnabled(true);
             myMutualTlsPassword.setEnabled(true);
+            mySelectTlsFile.setEnabled(true);
         } else {
             myMutualTlsFile.setEnabled(false);
             myMutualTlsPassword.setEnabled(false);
+            mySelectTlsFile.setEnabled(false);
+        }
+    }
+
+    private void selectPfxFile() {
+        var fc = new JFileChooser();
+        if (JFileChooser.APPROVE_OPTION == fc.showOpenDialog(myCustomPanel)) {
+            myMutualTlsFile.setText(fc.getSelectedFile().getAbsolutePath());
         }
     }
 }
