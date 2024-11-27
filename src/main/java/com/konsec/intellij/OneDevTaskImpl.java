@@ -73,7 +73,12 @@ public class OneDevTaskImpl extends Task implements Comparable<OneDevTaskImpl> {
     @NotNull
     @Override
     public TaskType getType() {
-        return TaskType.OTHER;
+        var type = task.getType();
+        return switch (type) {
+            case "Task", "New Feature" -> TaskType.FEATURE;
+            case "Bug" -> TaskType.BUG;
+            default -> TaskType.OTHER;
+        };
     }
 
     @Nullable
@@ -96,7 +101,7 @@ public class OneDevTaskImpl extends Task implements Comparable<OneDevTaskImpl> {
 
     @Override
     public boolean isIssue() {
-        return true;
+        return TaskType.BUG.equals(getType());
     }
 
     @Override

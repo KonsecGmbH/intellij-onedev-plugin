@@ -304,6 +304,8 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
                     .addParameter("query", query)
                     .addParameter("offset", String.valueOf(offset))
                     .addParameter("count", String.valueOf(limit))
+                    // For task types
+                    .addParameter("withFields", String.valueOf(true))
                     .build();
         } catch (URISyntaxException e) {
             throw new IOException(e);
