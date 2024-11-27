@@ -16,7 +16,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    if: false
     steps:
 
       # Check out the current repository
@@ -35,6 +34,8 @@ jobs:
       # Setup Gradle
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-disabled: true
 
       # Set environment variables
       - name: Export Properties
