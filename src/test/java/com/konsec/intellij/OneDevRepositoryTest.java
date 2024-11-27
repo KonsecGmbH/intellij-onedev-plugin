@@ -2,7 +2,11 @@ package com.konsec.intellij;
 
 import com.google.gson.JsonParser;
 import com.intellij.openapi.progress.util.AbstractProgressIndicatorBase;
-import com.intellij.testFramework.fixtures.BasePlatformTestCase;
+import com.intellij.openapi.util.JDOMUtil;
+import com.intellij.tasks.TaskManager;
+import com.intellij.tasks.impl.TaskManagerImpl;
+import com.intellij.testFramework.LightPlatform4TestCase;
+import com.intellij.util.xmlb.XmlSerializer;
 import com.konsec.intellij.model.OneDevComment;
 import com.konsec.intellij.model.OneDevProject;
 import com.konsec.intellij.model.OneDevTaskCreateData;
@@ -11,6 +15,8 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
+import org.jdom.Element;
+import org.jdom.JDOMException;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
@@ -21,11 +27,12 @@ import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.Optional;
 
 import static com.konsec.intellij.OneDevRepository.gson;
 
-public class OneDevRepositoryTest extends BasePlatformTestCase {
+public class OneDevRepositoryTest extends LightPlatform4TestCase {
 
     private static String URL;
     private static String MTLS_URL;
@@ -34,6 +41,8 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
     private static String PASSWORD;
 
     private OneDevRepository repository;
+
+    private TaskManagerImpl myTaskManager;
 
     private static String getenv(String key, String defaultValue) {
         var value = System.getenv(key);
@@ -123,10 +132,13 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
     public void setUp() throws Exception {
         super.setUp();
 
+        myTaskManager = (TaskManagerImpl) TaskManager.getManager(getProject());
+        myTaskManager.prepareForNextTest();
+
         setUpOneDev();
     }
 
-    private void initRepository(boolean useAccessToken, boolean useMutualTls) {
+    private OneDevRepository initRepository(boolean useAccessToken, boolean useMutualTls) {
         repository = new OneDevRepository();
         repository.setUseAccessToken(useAccessToken);
         if (useMutualTls) {
@@ -143,6 +155,7 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
             repository.setUsername(USERNAME);
             repository.setPassword(PASSWORD);
         }
+        return repository;
     }
 
     private Optional<Exception> verifyConnection() {
@@ -250,5 +263,28 @@ public class OneDevRepositoryTest extends BasePlatformTestCase {
         // Find task
         var foundTask = repository.findTask(issue.getSummary());
         Assert.assertNotNull(foundTask);
+    }
+
+    @Test
+    public void testSerialization() throws IOException, JDOMException {
+        for (var mutualTls : new boolean[]{true, false}) {
+            for (var token : new boolean[]{true, false}) {
+                var repo = initRepository(token, mutualTls);
+                myTaskManager.setRepositories(Collections.singletonList(repo));
+
+                TaskManagerImpl.Config config = myTaskManager.getState();
+                Element element = XmlSerializer.serialize(config);
+                Element element1 = JDOMUtil.load(JDOMUtil.writeElement(element));
+                TaskManagerImpl.Config deserialize = XmlSerializer.deserialize(element1, TaskManagerImpl.Config.class);
+                myTaskManager.loadState(deserialize);
+
+                var loadedRepo =  myTaskManager.getAllRepositories();
+                Assert.assertEquals(1, loadedRepo.length);
+                // Not same
+                Assert.assertNotSame(repo, loadedRepo[0]);
+                // But equal
+                Assert.assertEquals(repo, loadedRepo[0]);
+            }
+        }
     }
 }

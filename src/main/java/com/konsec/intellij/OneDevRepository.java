@@ -13,6 +13,7 @@ import com.intellij.tasks.impl.gson.TaskGsonUtil;
 import com.intellij.tasks.impl.httpclient.NewBaseRepositoryImpl;
 import com.intellij.tasks.impl.httpclient.TaskResponseUtil;
 import com.intellij.util.containers.ContainerUtil;
+import com.intellij.util.xmlb.annotations.Tag;
 import com.konsec.intellij.model.OneDevComment;
 import com.konsec.intellij.model.OneDevProject;
 import com.konsec.intellij.model.OneDevTask;
@@ -49,6 +50,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+@Tag("OneDev")
 public class OneDevRepository extends NewBaseRepositoryImpl {
     public static final Gson gson = TaskGsonUtil.createDefaultBuilder().create();
 
@@ -67,9 +69,9 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
 
     private final Map<Integer, OneDevProject> cachedProjects = new ConcurrentHashMap<>();
 
-    private boolean useAccessToken;
+    private boolean myUseAccessToken;
     private String searchQuery;
-    private boolean useMutualTls;
+    private boolean myUseMutualTls;
     private String mutualTlsCertificatePath;
     private String mutualTlsCertificatePassword;
 
@@ -82,9 +84,8 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
 
     public OneDevRepository(OneDevRepository other) {
         super(other);
+        setRepositoryType(other.getRepositoryType());
 
-        setUsername(other.getUsername());
-        setPassword(other.getPassword());
         setUseAccessToken(other.isUseAccessToken());
         setSearchQuery(other.getSearchQuery());
         setUseMutualTls(other.isUseMutualTls());
@@ -100,11 +101,11 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     }
 
     public boolean isUseAccessToken() {
-        return useAccessToken;
+        return myUseAccessToken;
     }
 
     public void setUseAccessToken(boolean useAccessToken) {
-        this.useAccessToken = useAccessToken;
+        this.myUseAccessToken = useAccessToken;
     }
 
     public String getSearchQuery() {
@@ -116,11 +117,11 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     }
 
     public boolean isUseMutualTls() {
-        return useMutualTls;
+        return myUseMutualTls;
     }
 
     public void setUseMutualTls(boolean useMutualTls) {
-        this.useMutualTls = useMutualTls;
+        this.myUseMutualTls = useMutualTls;
         this.httpClient = null;
     }
 
@@ -156,7 +157,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         if (!isUseAccessToken() && StringUtil.isEmpty(getUsername())) {
             return false;
         }
-        // Password and path are required for mTLS
+        // P12 password and path are required for mTLS
         if (isUseMutualTls()) {
             return !StringUtil.isEmpty(getMutualTlsCertificatePassword()) && !StringUtil.isEmpty(getMutualTlsCertificatePath());
         }
@@ -168,13 +169,14 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         if (!(o instanceof OneDevRepository other)) {
             return false;
         }
-        return Objects.equals(getPassword(), other.getPassword()) &&
+        return Objects.equals(getUrl(), other.getUrl()) &&
+                Objects.equals(getUsername(), other.getUsername()) &&
+                Objects.equals(getPassword(), other.getPassword()) &&
                 Objects.equals(isUseAccessToken(), other.isUseAccessToken()) &&
                 Objects.equals(getSearchQuery(), other.getSearchQuery()) &&
                 Objects.equals(isUseMutualTls(), other.isUseMutualTls()) &&
                 Objects.equals(getMutualTlsCertificatePassword(), other.getMutualTlsCertificatePassword()) &&
-                Objects.equals(getMutualTlsCertificatePath(), other.getMutualTlsCertificatePath()) &&
-                Objects.equals(getUrl(), other.getUrl());
+                Objects.equals(getMutualTlsCertificatePath(), other.getMutualTlsCertificatePath());
     }
 
     @NotNull
@@ -186,12 +188,11 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     @Override
     protected @NotNull HttpClient getHttpClient() {
         if (httpClient == null) {
-            if (!useMutualTls) {
+            if (!myUseMutualTls) {
                 httpClient = super.getHttpClient();
             } else {
                 HttpClientBuilder builder = HttpClients.custom()
                         .setDefaultRequestConfig(createRequestConfig())
-                        .setSSLHostnameVerifier(new NoopHostnameVerifier())
                         .setSSLSocketFactory(createMutualTlsSocketFactory());
                 httpClient = builder.build();
             }
