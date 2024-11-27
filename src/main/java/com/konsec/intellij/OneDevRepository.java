@@ -158,9 +158,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         }
         // Password and path are required for mTLS
         if (isUseMutualTls()) {
-            if (StringUtil.isEmpty(getMutualTlsCertificatePassword()) || StringUtil.isEmpty(getMutualTlsCertificatePath())) {
-                return false;
-            }
+            return !StringUtil.isEmpty(getMutualTlsCertificatePassword()) && !StringUtil.isEmpty(getMutualTlsCertificatePath());
         }
         return true;
     }

@@ -33,7 +33,7 @@ public class OneDevRepositoryEditor extends BaseRepositoryEditor<OneDevRepositor
 
         myRepository.setUseMutualTls(myUseMutualTls.isSelected());
         myRepository.setMutualTlsCertificatePath(myMutualTlsFile.getText());
-        myRepository.setMutualTlsCertificatePassword(myMutualTlsPassword.getText());
+        myRepository.setMutualTlsCertificatePassword(new String(myMutualTlsPassword.getPassword()));
 
         super.apply();
         adjustSettingsForServerProperties();
