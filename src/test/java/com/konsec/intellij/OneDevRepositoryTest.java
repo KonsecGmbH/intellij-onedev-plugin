@@ -247,16 +247,16 @@ public class OneDevRepositoryTest extends LightPlatform4TestCase {
         // Filter by closed
         var issueWasOpen = !issue.isClosed();
         var foundBefore = Arrays.stream(repository.getIssues(null, 0, 100, false, progress))
-                .filter(t -> t.getId().equals(issue.getId()))
+                .filter(t -> t.getNumber().equals(issue.getNumber()))
                 .findFirst();
         Assert.assertEquals(issueWasOpen, foundBefore.isPresent());
 
         // Set task state
-        repository.setTaskState(issue, issue.isClosed() ? OneDevRepository.STATE_OPEN : OneDevRepository.STATE_CLOSED);
+        repository.setTaskState(issue, issue.isClosed() ? OneDevRepository.DEFAULT_STATE_OPEN : OneDevRepository.DEFAULT_STATE_CLOSED);
 
         // Filter by closed after state change
         var foundAfter = Arrays.stream(repository.getIssues(null, 0, 100, false, progress))
-                .filter(t -> t.getId().equals(issue.getId()))
+                .filter(t -> t.getNumber().equals(issue.getNumber()))
                 .findFirst();
         Assert.assertEquals(!issueWasOpen, foundAfter.isPresent());
 

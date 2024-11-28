@@ -2,6 +2,7 @@ package com.konsec.intellij;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProgressIndicator;
 import com.intellij.openapi.util.text.StringUtil;
 import com.intellij.tasks.Comment;
@@ -14,10 +15,7 @@ import com.intellij.tasks.impl.httpclient.NewBaseRepositoryImpl;
 import com.intellij.tasks.impl.httpclient.TaskResponseUtil;
 import com.intellij.util.containers.ContainerUtil;
 import com.intellij.util.xmlb.annotations.Tag;
-import com.konsec.intellij.model.OneDevComment;
-import com.konsec.intellij.model.OneDevProject;
-import com.konsec.intellij.model.OneDevTask;
-import com.konsec.intellij.model.OneDevTaskCreateData;
+import com.konsec.intellij.model.*;
 import org.apache.http.HttpRequest;
 import org.apache.http.HttpRequestInterceptor;
 import org.apache.http.HttpResponse;
@@ -52,13 +50,15 @@ import java.util.stream.Collectors;
 
 @Tag("OneDev")
 public class OneDevRepository extends NewBaseRepositoryImpl {
+    private static final Logger LOG = Logger.getInstance(OneDevRepository.class);
+
     public static final Gson gson = TaskGsonUtil.createDefaultBuilder().create();
 
     public static final int MAX_COUNT = 100;
     public static final int MAX_PROJECTS_TO_LOAD = 500;
 
-    public static final CustomTaskState STATE_OPEN = new CustomTaskState("Open", "Open");
-    public static final CustomTaskState STATE_CLOSED = new CustomTaskState("Closed", "Closed");
+    public static final CustomTaskState DEFAULT_STATE_OPEN = new CustomTaskState("Open", "Open");
+    public static final CustomTaskState DEFAULT_STATE_CLOSED = new CustomTaskState("Closed", "Closed");
 
     private static final TypeToken<List<OneDevTask>> LIST_OF_TASKS_TYPE = new TypeToken<>() {
     };
@@ -68,6 +68,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     };
 
     private final Map<Integer, OneDevProject> cachedProjects = new ConcurrentHashMap<>();
+    private final List<OneDevIssueSettings.StateSpec> cachedStates = new ArrayList<>();
 
     private boolean myUseAccessToken;
     private String searchQuery;
@@ -96,8 +97,9 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     }
 
     private void init() {
-        setPreferredOpenTaskState(STATE_OPEN);
-        setPreferredCloseTaskState(STATE_CLOSED);
+        setPreferredOpenTaskState(DEFAULT_STATE_OPEN);
+        // TODO: dynamic
+        setPreferredCloseTaskState(DEFAULT_STATE_CLOSED);
     }
 
     public boolean isUseAccessToken() {
@@ -257,10 +259,20 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     @NotNull
     @Override
     public Set<CustomTaskState> getAvailableTaskStates(@NotNull Task task) {
-        Set<CustomTaskState> result = new HashSet<>();
-        result.add(STATE_OPEN);
-        result.add(STATE_CLOSED);
-        return result;
+        var states = loadTaskStates();
+
+        if (getPreferredOpenTaskState() == null) {
+            setPreferredOpenTaskState(states.get(0));
+        }
+        if (getPreferredCloseTaskState() == null) {
+            for (var i = states.size() - 1; i > 0; i--) {
+                if (isStateClosed(states.get(i).getId())) {
+                    setPreferredCloseTaskState(states.get(i));
+                    break;
+                }
+            }
+        }
+        return new HashSet<>(states);
     }
 
     @Override
@@ -292,7 +304,8 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
             query = getSearchQuery();
         } else {
             if (StringUtil.isEmpty(query)) {
-                query = withClosed ? "" : "\"State\" is \"Open\"";
+                var closedState = getPreferredCloseTaskState().getId();
+                query = withClosed ? "" : "\"State\" is not \"" + closedState + "\"";
             } else {
                 query = " ~ \"" + query.replace("\"", "")  + "\" ~";
             }
@@ -315,9 +328,41 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
 
         List<OneDevTask> tasks = getHttpClient().execute(req, new TaskResponseUtil.GsonMultipleObjectsDeserializer<>(gson, LIST_OF_TASKS_TYPE));
         if (!withClosed) {
-            tasks = tasks.stream().filter(t -> !STATE_CLOSED.getId().equals(t.state)).collect(Collectors.toList());
+            tasks = tasks.stream().filter(t -> !isStateClosed(t.state)).collect(Collectors.toList());
         }
         return ContainerUtil.map2Array(tasks, OneDevTaskImpl.class, (task) -> new OneDevTaskImpl(this, task, getProject(task.projectId)));
+    }
+
+    public boolean isStateClosed(String stateName) {
+        var preferred = getPreferredCloseTaskState();
+        if (preferred != null && preferred.getId().equals(stateName)) {
+            return true;
+        }
+
+        // TODO: more complex rules?
+
+        return false;
+    }
+
+    private List<CustomTaskState> loadTaskStates() {
+        synchronized (cachedStates) {
+            if (cachedStates.isEmpty()) {
+                try {
+                    var settings = getIssueSettings();
+                    cachedStates.addAll(settings.stateSpecs);
+                } catch (IOException e) {
+                    LOG.warn("Could not load task states", e);
+                }
+            }
+
+            List<CustomTaskState> ret = new ArrayList<>();
+            cachedStates.forEach(state -> ret.add(new CustomTaskState(state.name, state.name)));
+            if (ret.isEmpty()) {
+                ret.add(DEFAULT_STATE_OPEN);
+                ret.add(DEFAULT_STATE_CLOSED);
+            }
+            return ret;
+        }
     }
 
     private OneDevProject getProject(int projectId) {
@@ -403,6 +448,14 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
 
         List<OneDevComment> comments = getHttpClient().execute(req, new TaskResponseUtil.GsonMultipleObjectsDeserializer<>(gson, LIST_OF_COMMENTS_TYPE));
         return ContainerUtil.map2Array(comments, Comment.class, (comment) -> new SimpleComment(comment.date, getUserName(comment.userId), comment.content));
+    }
+
+    private OneDevIssueSettings getIssueSettings() throws IOException {
+        var endpointUrl = getRestApiUrl("settings", "issue");
+        var req = new HttpGet(endpointUrl);
+        addAuthHeader(req);
+
+        return getHttpClient().execute(req, new TaskResponseUtil.GsonSingleObjectDeserializer<>(gson, OneDevIssueSettings.class));
     }
 
     @Override

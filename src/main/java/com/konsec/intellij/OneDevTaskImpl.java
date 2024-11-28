@@ -33,7 +33,7 @@ public class OneDevTaskImpl extends Task implements Comparable<OneDevTaskImpl> {
 
     @Override
     public @NotNull String getNumber() {
-        return String.valueOf(task.number);
+        return String.valueOf(task.id);
     }
 
     @NotNull
@@ -96,7 +96,7 @@ public class OneDevTaskImpl extends Task implements Comparable<OneDevTaskImpl> {
 
     @Override
     public boolean isClosed() {
-        return "Closed".equals(task.state);
+        return repository.isStateClosed(task.state);
     }
 
     @Override
@@ -114,6 +114,11 @@ public class OneDevTaskImpl extends Task implements Comparable<OneDevTaskImpl> {
     public String getIssueUrl() {
         // http://127.0.0.1:6610/proj/~issues/1
         return repository.getUrl() + "/" + project.name + "/~issues/" + task.number;
+    }
+
+    @Override
+    public String getPresentableName() {
+        return getPresentableId() + ": " + this.getSummary();
     }
 
     @Override
