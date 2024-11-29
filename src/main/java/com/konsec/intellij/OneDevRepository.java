@@ -464,11 +464,6 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         return "/~api/";
     }
 
-    @Override
-    protected @Nullable HttpRequestInterceptor createRequestInterceptor() {
-        return (request, context) -> addAuthHeader(request);
-    }
-
     private void throwOnError(HttpResponse response) {
         StatusLine statusLine = response.getStatusLine();
         if (statusLine != null && statusLine.getStatusCode() != 200) {
