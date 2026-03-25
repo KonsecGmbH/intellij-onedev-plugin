@@ -482,6 +482,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         String basicAuthUsername = isUseAccessToken() ? "user" : getUsername();
         var usernamePassword = (basicAuthUsername + ":" + getPassword()).getBytes(StandardCharsets.UTF_8);
         request.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString(usernamePassword));
+        request.addHeader("Accept", "application/json");
     }
 
     private HttpGet initProjectsRequest(int offset, int count) throws URISyntaxException {
