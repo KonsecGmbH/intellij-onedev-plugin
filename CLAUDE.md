@@ -40,3 +40,15 @@ The plugin works and does what is needed. Client Certificates can be also config
 - Use Java 21 features appropriately
 - Follow existing code patterns
 - Security: Never expose/log secrets or keys
+
+## Development Workflow
+
+We're following the github workflow:
+- Devs and AI agents on forks.
+- They branch from the master branch of their forked repo and push their changes there.
+- They send PRs of these changes to the main repo.
+- They rebase the master branch of their forked repo always cleanly to the main repo.
+- gh command is installed, use it to create and update PRs
+
+
+**NEVER COMMIT TO MASTER**, *always create a new branch and send a PR*
