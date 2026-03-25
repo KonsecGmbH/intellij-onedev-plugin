@@ -12,6 +12,7 @@ import com.konsec.intellij.model.OneDevProject;
 import com.konsec.intellij.model.OneDevTaskCreateData;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
@@ -86,8 +87,7 @@ public class OneDevRepositoryTest extends LightPlatform4TestCase {
         // Issue token
         var endpointUrl = URL + "~api/access-tokens";
         var req = new HttpPost(endpointUrl);
-        req.setEntity(new StringEntity(gson.toJson(accessToken)));
-        req.addHeader("Content-Type", "application/json");
+        req.setEntity(new StringEntity(gson.toJson(accessToken), ContentType.APPLICATION_JSON));
         req.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString(usernamePassword));
         var httpClient = HttpClientBuilder.create().build();
         var resp = httpClient.execute(req);
