@@ -15,5 +15,6 @@ public class OneDevTaskCreateData {
 
     public Map<String, Serializable> fields = new HashMap<>();
 
-    public int ownEstimatedTime = 0;
+    // Use Integer (nullable) so Gson omits this field when null; OneDev rejects non-null value without active subscription
+    public Integer ownEstimatedTime = null;
 }

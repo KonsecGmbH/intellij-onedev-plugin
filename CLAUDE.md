@@ -42,7 +42,8 @@ The plugin works and does what is needed. Client Certificates can be also config
 - Security: Never expose/log secrets or keys
 
 ### Dependencies
-- The idea platform sources are available in tmp/intellij-community-idea-242.26775.15
+- The idea platform sources are available in tmp/intellij-community-idea*
+- The onedev source code is in tmp/onedev
 - Ask if you need access to sources of a dependency
 
 ## Development Workflow
