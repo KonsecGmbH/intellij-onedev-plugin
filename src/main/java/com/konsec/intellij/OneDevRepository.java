@@ -28,6 +28,7 @@ import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.conn.ssl.TrustAllStrategy;
+import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
@@ -285,8 +286,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     public void setTaskState(@NotNull Task task, @NotNull CustomTaskState state) throws IOException {
         var endpointUrl = getRestApiUrl("issues", task.getNumber(), "state-transitions");
         var req = new HttpPost(endpointUrl);
-        req.setEntity(new StringEntity(gson.toJson(new StateTransitionData(state.getId()))));
-        req.addHeader("Content-Type", "application/json");
+        req.setEntity(new StringEntity(gson.toJson(new StateTransitionData(state.getId())), ContentType.APPLICATION_JSON));
         addAuthHeader(req);
 
         var resp = getHttpClient().execute(req);
@@ -313,7 +313,10 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
                 var closedState = getPreferredCloseTaskState().getId();
                 query = withClosed ? "" : "\"State\" is not \"" + closedState + "\"";
             } else {
-                query = " ~ \"" + query.replace("\"", "")  + "\" ~";
+                // Use "Title" contains query (SQL LIKE) instead of fuzzy search (~text~)
+                // because OneDev's Lucene full-text index is built asynchronously and may
+                // not contain newly-created issues when findTask is called immediately after creation.
+                query = "\"Title\" contains \"" + query.replace("\"", "") + "\"";
             }
         }
 
@@ -434,8 +437,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
 
     private int createEntity(String endpointUrl, Object payload) throws IOException {
         var req = new HttpPost(endpointUrl);
-        req.setEntity(new StringEntity(gson.toJson(payload)));
-        req.addHeader("Content-Type", "application/json");
+        req.setEntity(new StringEntity(gson.toJson(payload), ContentType.APPLICATION_JSON));
         addAuthHeader(req);
 
         var resp = getHttpClient().execute(req);
@@ -472,7 +474,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
 
     private void throwOnError(HttpResponse response) {
         StatusLine statusLine = response.getStatusLine();
-        if (statusLine != null && statusLine.getStatusCode() != 200) {
+        if (statusLine != null && (statusLine.getStatusCode() < 200 || statusLine.getStatusCode() >= 300)) {
             throw RequestFailedException.forStatusCode(statusLine.getStatusCode(), statusLine.getReasonPhrase());
         }
     }
@@ -482,6 +484,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         String basicAuthUsername = isUseAccessToken() ? "user" : getUsername();
         var usernamePassword = (basicAuthUsername + ":" + getPassword()).getBytes(StandardCharsets.UTF_8);
         request.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString(usernamePassword));
+        request.addHeader("Accept", "application/json");
     }
 
     private HttpGet initProjectsRequest(int offset, int count) throws URISyntaxException {

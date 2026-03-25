@@ -2,7 +2,7 @@ name: onedev-it
 services:
   onedev-test:
     container_name: onedev-test
-    image: 1dev/server
+    image: 1dev/server:14.1.9
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
       - ./onedev:/opt/onedev
