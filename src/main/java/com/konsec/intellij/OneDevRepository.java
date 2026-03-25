@@ -472,7 +472,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
 
     private void throwOnError(HttpResponse response) {
         StatusLine statusLine = response.getStatusLine();
-        if (statusLine != null && statusLine.getStatusCode() != 200) {
+        if (statusLine != null && (statusLine.getStatusCode() < 200 || statusLine.getStatusCode() >= 300)) {
             throw RequestFailedException.forStatusCode(statusLine.getStatusCode(), statusLine.getReasonPhrase());
         }
     }
