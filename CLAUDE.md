@@ -41,6 +41,10 @@ The plugin works and does what is needed. Client Certificates can be also config
 - Follow existing code patterns
 - Security: Never expose/log secrets or keys
 
+### Dependencies
+- The idea platform sources are available in tmp/intellij-community-idea-242.26775.15
+- Ask if you need access to sources of a dependency
+
 ## Development Workflow
 
 We're following the github workflow:
