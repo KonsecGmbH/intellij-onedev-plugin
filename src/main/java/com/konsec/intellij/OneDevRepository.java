@@ -313,7 +313,10 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
                 var closedState = getPreferredCloseTaskState().getId();
                 query = withClosed ? "" : "\"State\" is not \"" + closedState + "\"";
             } else {
-                query = " ~ \"" + query.replace("\"", "")  + "\" ~";
+                // Use "Title" contains query (SQL LIKE) instead of fuzzy search (~text~)
+                // because OneDev's Lucene full-text index is built asynchronously and may
+                // not contain newly-created issues when findTask is called immediately after creation.
+                query = "\"Title\" contains \"" + query.replace("\"", "") + "\"";
             }
         }
 
