@@ -14,6 +14,7 @@ import com.intellij.tasks.impl.gson.TaskGsonUtil;
 import com.intellij.tasks.impl.httpclient.NewBaseRepositoryImpl;
 import com.intellij.tasks.impl.httpclient.TaskResponseUtil;
 import com.intellij.util.containers.ContainerUtil;
+import com.intellij.util.xmlb.annotations.Attribute;
 import com.intellij.util.xmlb.annotations.Tag;
 import com.konsec.intellij.model.*;
 import org.apache.http.HttpRequest;
@@ -70,10 +71,15 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     private final Map<Integer, OneDevProject> cachedProjects = new ConcurrentHashMap<>();
     private final List<OneDevIssueSettings.StateSpec> cachedStates = new ArrayList<>();
 
+    @Attribute
     private boolean myUseAccessToken;
+    @Attribute
     private String searchQuery;
+    @Attribute
     private boolean myUseMutualTls;
+    @Attribute
     private String mutualTlsCertificatePath;
+    @Attribute
     private String mutualTlsCertificatePassword;
 
     private HttpClient httpClient;
@@ -173,7 +179,7 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         }
         return Objects.equals(getUrl(), other.getUrl()) &&
                 Objects.equals(getUsername(), other.getUsername()) &&
-                Objects.equals(getPassword(), other.getPassword()) &&
+                Objects.equals(StringUtil.notNullize(getPassword()), StringUtil.notNullize(other.getPassword())) &&
                 Objects.equals(isUseAccessToken(), other.isUseAccessToken()) &&
                 Objects.equals(getSearchQuery(), other.getSearchQuery()) &&
                 Objects.equals(isUseMutualTls(), other.isUseMutualTls()) &&

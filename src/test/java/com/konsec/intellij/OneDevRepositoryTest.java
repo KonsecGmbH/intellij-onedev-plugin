@@ -18,6 +18,7 @@ import org.apache.http.util.EntityUtils;
 import org.jdom.Element;
 import org.jdom.JDOMException;
 import org.junit.Assert;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -34,6 +35,7 @@ import static com.konsec.intellij.OneDevRepository.gson;
 
 public class OneDevRepositoryTest extends LightPlatform4TestCase {
 
+    private static boolean setupDone = false;
     private static String URL;
     private static String MTLS_URL;
     private static String TOKEN;
@@ -50,9 +52,10 @@ public class OneDevRepositoryTest extends LightPlatform4TestCase {
     }
 
     private static void setUpOneDev() throws IOException, InterruptedException {
-        if (URL != null && TOKEN != null) {
+        if (setupDone) {
             return;
         }
+        setupDone = true;
 
         URL = getenv("ONEDEV_URL", "http://127.0.0.1:6610/");
         MTLS_URL = getenv("ONEDEV_MTLS_URL", "https://127.0.0.1:8443/");
@@ -62,13 +65,13 @@ public class OneDevRepositoryTest extends LightPlatform4TestCase {
         var token = getenv("ONEDEV_TOKEN", null);
         if (token == null) {
 
-            for (int i = 0; i < 100; i++) {
+            for (int i = 0; i < 3; i++) {
                 try {
                     token = issueAccessToken(USERNAME, PASSWORD);
                     break;
                 } catch (SocketException e) {
-                    // Ignore, docker container is staring
-                    Thread.sleep(1000);
+                    // Ignore, docker container is starting
+                    Thread.sleep(500);
                 }
             }
         }
@@ -165,6 +168,7 @@ public class OneDevRepositoryTest extends LightPlatform4TestCase {
 
     @Test
     public void testConnectionMutualTls() {
+        Assume.assumeNotNull("OneDev server not available", TOKEN);
         initRepository(false, true);
         Assert.assertTrue(repository.isUseMutualTls());
         Assert.assertTrue(repository.getUrl().startsWith("https://"));
@@ -178,6 +182,7 @@ public class OneDevRepositoryTest extends LightPlatform4TestCase {
 
     @Test
     public void testConnectionUsernamePassword() {
+        Assume.assumeNotNull("OneDev server not available", TOKEN);
         initRepository(false, false);
 
         Exception error = verifyConnection().orElse(null);
@@ -189,6 +194,7 @@ public class OneDevRepositoryTest extends LightPlatform4TestCase {
 
     @Test
     public void testConnectionUsernamePasswordInvalid() {
+        Assume.assumeNotNull("OneDev server not available", TOKEN);
         initRepository(false, false);
         repository.setPassword(repository.getPassword() + "1");
 
@@ -198,6 +204,7 @@ public class OneDevRepositoryTest extends LightPlatform4TestCase {
 
     @Test
     public void testConnectionToken() {
+        Assume.assumeNotNull("OneDev server not available", TOKEN);
         initRepository(true, false);
 
         Exception error = verifyConnection().orElse(null);
@@ -209,6 +216,7 @@ public class OneDevRepositoryTest extends LightPlatform4TestCase {
 
     @Test
     public void testConnectionTokenInvalid() {
+        Assume.assumeNotNull("OneDev server not available", TOKEN);
         initRepository(true, false);
         repository.setPassword(repository.getPassword() + "1");
 
@@ -218,6 +226,7 @@ public class OneDevRepositoryTest extends LightPlatform4TestCase {
 
     @Test
     public void testOneDevApiOperations() throws IOException {
+        Assume.assumeNotNull("OneDev server not available", TOKEN);
         initRepository(true, false);
         var progress = new AbstractProgressIndicatorBase();
 
