@@ -17,9 +17,8 @@ version = providers.gradleProperty("pluginVersion").get()
 // Set the JVM language level used to build the project.
 kotlin {
     jvmToolchain {
-        languageVersion.set(JavaLanguageVersion.of(24))
-        // vendor.set(JvmVendorSpec.IBM_SEMERU) // OLD: This will fail
-        vendor.set(JvmVendorSpec.ADOPTIUM)           // NEW: Use this
+        languageVersion.set(JavaLanguageVersion.of(21))
+        vendor.set(JvmVendorSpec.ADOPTIUM)
     }
 }
 
