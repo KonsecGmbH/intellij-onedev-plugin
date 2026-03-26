@@ -7,6 +7,7 @@ import com.intellij.tasks.TaskManager;
 import com.intellij.tasks.impl.TaskManagerImpl;
 import com.intellij.testFramework.LightPlatform4TestCase;
 import com.intellij.util.xmlb.XmlSerializer;
+import com.konsec.intellij.model.OneDevBuild;
 import com.konsec.intellij.model.OneDevComment;
 import com.konsec.intellij.model.OneDevProject;
 import com.konsec.intellij.model.OneDevTaskCreateData;
@@ -272,6 +273,25 @@ public class OneDevRepositoryTest extends LightPlatform4TestCase {
         // Find task
         var foundTask = repository.findTask(issue.getSummary());
         Assert.assertNotNull(foundTask);
+    }
+
+    @Test
+    public void testBuildApiOperations() throws IOException {
+        Assume.assumeNotNull("OneDev server not available", TOKEN);
+        initRepository(true, false);
+
+        var builds = repository.loadBuilds("", 0, OneDevRepository.MAX_COUNT);
+        Assert.assertNotNull(builds);
+
+        if (!builds.isEmpty()) {
+            OneDevBuild first = builds.get(0);
+            Assert.assertNotNull(first);
+            Assert.assertTrue(first.id > 0);
+
+            var fetched = repository.getBuild(first.id);
+            Assert.assertNotNull(fetched);
+            Assert.assertEquals(first.id, fetched.id);
+        }
     }
 
     @Test
