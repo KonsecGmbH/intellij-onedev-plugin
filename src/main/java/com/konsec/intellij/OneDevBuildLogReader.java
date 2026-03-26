@@ -8,6 +8,7 @@ import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -66,7 +67,13 @@ public class OneDevBuildLogReader {
                     String json = new String(bytes, StandardCharsets.UTF_8);
 
                     JsonObject entry = JsonParser.parseString(json).getAsJsonObject();
-                    Date date = new Date(entry.get("date").getAsLong());
+                    var dateElement = entry.get("date");
+                    Date date;
+                    if (dateElement.isJsonPrimitive() && dateElement.getAsJsonPrimitive().isNumber()) {
+                        date = new Date(dateElement.getAsLong());
+                    } else {
+                        date = Date.from(OffsetDateTime.parse(dateElement.getAsString()).toInstant());
+                    }
 
                     List<LogMessage> messages = new ArrayList<>();
                     JsonArray messagesArray = entry.getAsJsonArray("messages");
