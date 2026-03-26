@@ -172,7 +172,7 @@ public class OneDevBuildsPanel extends SimpleToolWindowPanel {
         return projects.stream()
                 .filter(p -> p.id == selectedItem.id)
                 .findFirst()
-                .map(p -> "\"Project\" is \"" + p.name + "\"")
+                .map(p -> "\"Project\" is \"" + projectDisplayName(p) + "\"")
                 .orElse("");
     }
 
@@ -187,7 +187,7 @@ public class OneDevBuildsPanel extends SimpleToolWindowPanel {
         projectFilter.removeAllItems();
         projectFilter.addItem(new ProjectItem(null, "All Projects"));
         for (var p : projects) {
-            projectFilter.addItem(new ProjectItem((long) p.id, p.name));
+            projectFilter.addItem(new ProjectItem((long) p.id, projectDisplayName(p)));
         }
 
         // Restore selection
@@ -207,7 +207,7 @@ public class OneDevBuildsPanel extends SimpleToolWindowPanel {
             var projectName = projects.stream()
                     .filter(p -> p.id == build.projectId)
                     .findFirst()
-                    .map(p -> p.name)
+                    .map(this::projectDisplayName)
                     .orElse(String.valueOf(build.projectId));
 
             String shortCommit = build.commitHash != null && build.commitHash.length() > 7
@@ -222,6 +222,10 @@ public class OneDevBuildsPanel extends SimpleToolWindowPanel {
                     build.submitDate != null ? formatRelativeDate(build.submitDate) : ""
             });
         }
+    }
+
+    private String projectDisplayName(OneDevProject p) {
+        return (p.path != null && !p.path.isEmpty()) ? p.path : p.name;
     }
 
     private Icon statusIcon(String status) {
