@@ -10,11 +10,14 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.SimpleToolWindowPanel;
 import com.intellij.openapi.util.Disposer;
+import com.intellij.ui.components.JBLoadingPanel;
 import com.konsec.intellij.OneDevBuildLogReader;
 import com.konsec.intellij.OneDevRepository;
 import com.konsec.intellij.model.OneDevBuild;
 import org.jetbrains.annotations.NotNull;
 
+import javax.swing.*;
+import java.awt.*;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Date;
@@ -23,15 +26,19 @@ import java.util.List;
 public class OneDevBuildLogPanel extends SimpleToolWindowPanel implements Disposable {
 
     private final ConsoleView consoleView;
+    private final JBLoadingPanel loadingPanel;
     private volatile InputStream logStream;
     private volatile boolean stopped = false;
+    private volatile boolean loadingStopped = false;
 
     public OneDevBuildLogPanel(@NotNull Project project, @NotNull OneDevRepository repo,
                                @NotNull OneDevBuild build) {
         super(false, true);
 
         consoleView = TextConsoleBuilderFactory.getInstance().createBuilder(project).getConsole();
-        setContent(consoleView.getComponent());
+        loadingPanel = new JBLoadingPanel(new BorderLayout(), this);
+        loadingPanel.add(consoleView.getComponent());
+        setContent(loadingPanel);
 
         var stopAction = new AnAction("Stop", "Stop streaming log", AllIcons.Actions.Suspend) {
             @Override
@@ -55,7 +62,15 @@ public class OneDevBuildLogPanel extends SimpleToolWindowPanel implements Dispos
         toolbar.setTargetComponent(consoleView.getComponent());
         setToolbar(toolbar.getComponent());
 
+        loadingPanel.startLoading();
         ApplicationManager.getApplication().executeOnPooledThread(() -> streamLog(repo, build));
+    }
+
+    private void stopLoadingOnce() {
+        if (!loadingStopped) {
+            loadingStopped = true;
+            SwingUtilities.invokeLater(loadingPanel::stopLoading);
+        }
     }
 
     private void streamLog(OneDevRepository repo, OneDevBuild build) {
@@ -64,6 +79,7 @@ public class OneDevBuildLogPanel extends SimpleToolWindowPanel implements Dispos
             OneDevBuildLogReader.read(logStream, new OneDevBuildLogReader.LogCallback() {
                 @Override
                 public void onLogEntry(Date date, List<OneDevBuildLogReader.LogMessage> messages) {
+                    stopLoadingOnce();
                     if (stopped) return;
                     for (var msg : messages) {
                         consoleView.print(msg.text + "\n", contentTypeFor(msg.style));
@@ -72,18 +88,21 @@ public class OneDevBuildLogPanel extends SimpleToolWindowPanel implements Dispos
 
                 @Override
                 public void onStatusChange(String status) {
+                    stopLoadingOnce();
                     if (stopped) return;
                     consoleView.print("[Status: " + status + "]\n", ConsoleViewContentType.SYSTEM_OUTPUT);
                 }
 
                 @Override
                 public void onComplete() {
+                    stopLoadingOnce();
                     stopped = true;
                     consoleView.print("[Log complete]\n", ConsoleViewContentType.SYSTEM_OUTPUT);
                 }
 
                 @Override
                 public void onError(Exception e) {
+                    stopLoadingOnce();
                     if (!stopped) {
                         consoleView.print("[Error reading log: " + e.getMessage() + "]\n",
                                 ConsoleViewContentType.ERROR_OUTPUT);
@@ -92,6 +111,7 @@ public class OneDevBuildLogPanel extends SimpleToolWindowPanel implements Dispos
                 }
             });
         } catch (IOException e) {
+            stopLoadingOnce();
             if (!stopped) {
                 consoleView.print("[Error: " + e.getMessage() + "]\n",
                         ConsoleViewContentType.ERROR_OUTPUT);
