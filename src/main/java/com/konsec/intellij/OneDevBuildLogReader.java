@@ -79,8 +79,21 @@ public class OneDevBuildLogReader {
                     JsonArray messagesArray = entry.getAsJsonArray("messages");
                     for (int i = 0; i < messagesArray.size(); i++) {
                         JsonObject msg = messagesArray.get(i).getAsJsonObject();
-                        String style = msg.has("style") && !msg.get("style").isJsonNull()
-                                ? msg.get("style").getAsString() : null;
+                        String style = null;
+                        if (msg.has("style") && !msg.get("style").isJsonNull()) {
+                            var styleEl = msg.get("style");
+                            if (styleEl.isJsonObject()) {
+                                String color = styleEl.getAsJsonObject().has("color")
+                                        ? styleEl.getAsJsonObject().get("color").getAsString() : "fg-default";
+                                style = switch (color) {
+                                    case "31" -> "error";   // red
+                                    case "33" -> "warning"; // yellow
+                                    default -> null;
+                                };
+                            } else if (styleEl.isJsonPrimitive()) {
+                                style = styleEl.getAsString();
+                            }
+                        }
                         String text = msg.get("text").getAsString();
                         messages.add(new LogMessage(style, text));
                     }
