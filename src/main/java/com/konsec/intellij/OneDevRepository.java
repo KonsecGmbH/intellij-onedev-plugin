@@ -68,6 +68,8 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
     };
     private static final TypeToken<List<OneDevProject>> LIST_OF_PROJECTS_TYPE = new TypeToken<>() {
     };
+    private static final TypeToken<List<OneDevBuild>> LIST_OF_BUILDS_TYPE = new TypeToken<>() {
+    };
 
     private final Map<Integer, OneDevProject> cachedProjects = new ConcurrentHashMap<>();
     private final List<OneDevIssueSettings.StateSpec> cachedStates = new ArrayList<>();
@@ -485,6 +487,45 @@ public class OneDevRepository extends NewBaseRepositoryImpl {
         var usernamePassword = (basicAuthUsername + ":" + getPassword()).getBytes(StandardCharsets.UTF_8);
         request.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString(usernamePassword));
         request.addHeader("Accept", "application/json");
+    }
+
+    private void addAuthHeaderForStream(HttpRequest request) {
+        String basicAuthUsername = isUseAccessToken() ? "user" : getUsername();
+        var usernamePassword = (basicAuthUsername + ":" + getPassword()).getBytes(StandardCharsets.UTF_8);
+        request.addHeader("Authorization", "Basic " + Base64.getEncoder().encodeToString(usernamePassword));
+        // No Accept: application/json — streaming endpoint returns binary data
+    }
+
+    public List<OneDevBuild> loadBuilds(String query, int offset, int count) throws IOException {
+        URI endpointUrl;
+        try {
+            var builder = new URIBuilder(getRestApiUrl("builds"))
+                    .addParameter("offset", String.valueOf(offset))
+                    .addParameter("count", String.valueOf(count));
+            if (query != null && !query.isEmpty()) {
+                builder.addParameter("query", query);
+            }
+            endpointUrl = builder.build();
+        } catch (URISyntaxException e) {
+            throw new IOException(e);
+        }
+        var req = new HttpGet(endpointUrl);
+        addAuthHeader(req);
+        return getHttpClient().execute(req, new TaskResponseUtil.GsonMultipleObjectsDeserializer<>(gson, LIST_OF_BUILDS_TYPE));
+    }
+
+    public OneDevBuild getBuild(long buildId) throws IOException {
+        var req = new HttpGet(getRestApiUrl("builds", buildId));
+        addAuthHeader(req);
+        return getHttpClient().execute(req, new TaskResponseUtil.GsonSingleObjectDeserializer<>(gson, OneDevBuild.class));
+    }
+
+    public InputStream openBuildLogStream(long buildId) throws IOException {
+        var req = new HttpGet(getRestApiUrl("streaming", "build-logs", buildId));
+        addAuthHeaderForStream(req);
+        var response = getHttpClient().execute(req);
+        throwOnError(response);
+        return response.getEntity().getContent();
     }
 
     private HttpGet initProjectsRequest(int offset, int count) throws URISyntaxException {

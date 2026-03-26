@@ -11,5 +11,10 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <tasks.repositoryType implementation="com.konsec.intellij.OneDevRepositoryType"/>
+        <toolWindow id="OneDev Builds" anchor="right" icon="/onedev.svg"
+                    factoryClass="com.konsec.intellij.builds.OneDevBuildToolWindowFactory"/>
+        <toolWindow id="OneDev Build Log" anchor="bottom" icon="/onedev.svg"
+                    factoryClass="com.konsec.intellij.builds.OneDevBuildLogToolWindowFactory"
+                    canCloseContents="true"/>
     </extensions>
 </idea-plugin>
