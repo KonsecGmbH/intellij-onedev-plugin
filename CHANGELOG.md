@@ -3,6 +3,8 @@
 # intellij-onedev-plugin Changelog
 
 ## [Unreleased]
+
+## [1.0.0]
 ### Added
 - OneDev Builds integration: tool window showing CI build status, log streaming, and tests
 - Show full project path (e.g. `main/mesgitserver`) in Builds table and project filter
