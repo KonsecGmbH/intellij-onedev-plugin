@@ -1,5 +1,6 @@
 import org.jetbrains.changelog.Changelog
 import org.jetbrains.changelog.markdownToHTML
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 plugins {
@@ -106,7 +107,12 @@ intellijPlatform {
 
     pluginVerification {
         ides {
-            recommended()
+            // Verify against an explicitly pinned IDE instead of `recommended()`.
+            // `recommended()` resolves its IDE list from JetBrains release feeds
+            // (including the Android Studio releases list on teamcity.jetbrains.com),
+            // which intermittently returns HTTP 503 and breaks CI. Pinning the IDE
+            // makes verification deterministic and avoids that flaky dependency.
+            create(IntelliJPlatformType.IntellijIdeaCommunity, providers.gradleProperty("platformVersion"))
         }
     }
 }
