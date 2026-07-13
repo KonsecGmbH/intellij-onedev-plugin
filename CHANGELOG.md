@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+## [1.0.1]
+### Changed
+- Update IntelliJ Platform Gradle plugin from 2.15.0 to 2.18.0
+- Update Kotlin from 2.3.21 to 2.4.0
+- Update Gradle wrapper from 9.5.0 to 9.6.1
+- Update Qodana Gradle plugin from 2026.1.0 to 2026.1.3
+- Update CI actions (codecov-action 6→7, actions/checkout 6→7, actions/cache 5→6)
+
+### Fixed
+- Flaky `verifyPlugin` CI failure caused by the Android Studio releases feed
+
 ## [1.0.0]
 ### Added
 - OneDev Builds integration: tool window showing CI build status, log streaming, and tests
