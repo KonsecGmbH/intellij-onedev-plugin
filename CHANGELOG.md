@@ -4,6 +4,21 @@
 
 ## [Unreleased]
 
+## [1.0.2]
+### Added
+- Shared server profiles: OneDev connection settings can be saved as named, application-level profiles and reused when configuring the repository in any project (API token and mTLS certificate password are kept in the IDE `PasswordSafe`, never in the serialized state)
+
+### Changed
+- Update IntelliJ Platform Gradle plugin from 2.18.0 to 2.18.1
+- Update Kotlin from 2.4.0 to 2.4.20
+- Update Kover from 0.9.8 to 0.9.9
+- Update Qodana Gradle plugin from 2026.1.3 to 2026.2.1
+- Update Gradle wrapper from 9.6.1 to 9.7.1
+- Update CI actions (gradle/actions 4→6.3.0, actions/setup-java 5→6)
+
+### Fixed
+- Qodana CI: align the linter with the 2026.1 action and Java 21
+
 ## [1.0.1]
 ### Changed
 - Update IntelliJ Platform Gradle plugin from 2.15.0 to 2.18.0
